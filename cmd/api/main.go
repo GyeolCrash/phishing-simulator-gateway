@@ -46,8 +46,17 @@ func main() {
 
 	// CORS 설정
 	config := cors.DefaultConfig()
-	config.AllowAllOrigins = true // 경고: 실제 배포 시에는 특정 도메인으로 제한해야 함
+
+	// CORS는 브라우저 전용 보안 규칙, 안드로이드는 OS가 직접 통신하므로 적용되지 않음
+	config.AllowOrigins = []string{
+		"http://localhost:8080",
+		"http://34.22.110.190",
+	}
+
+	// config.AllowAllOrigins = true // 경고: 실제 배포 시에는 특정 도메인으로 제한해야 함
 	config.AllowHeaders = append(config.AllowHeaders, "Authorization")
+	config.AllowCredentials = true
+
 	router.Use(cors.New(config))
 
 	rateLimitMiddleware := limit.NewRateLimiter(func(c *gin.Context) string {
@@ -61,8 +70,9 @@ func main() {
 	router.Use(rateLimitMiddleware)
 
 	// 라우트 설정
-	router.POST("/signup", rateLimitMiddleware /*middleware.InviteCodeMiddleware(), */, handler.Signup)
-	router.POST("/login", rateLimitMiddleware, handler.Login)
+	router.POST("/signup", rateLimitMiddleware, middleware.AccessCodeMiddleware(), handler.Signup)
+	router.POST("/login", rateLimitMiddleware, middleware.AccessCodeMiddleware(), handler.Login)
+	router.GET("/test", rateLimitMiddleware, handler.TestGet)
 
 	// 보호된 라우트 그룹
 	protected := router.Group("/api").Use(middleware.AuthMiddleware())

@@ -63,6 +63,7 @@ type HistoryResponse struct {
 // @Tags         User
 // @Accept       json
 // @Produce      json
+// @in header        Project-Secure header    string  true  "프로젝트 접근 보안 코드"
 // @Param        request body handler.SignupRequest true "회원가입 요청 정보"
 // @Success      200 {object} handler.SuccessResponse
 // @Failure      400 {object} handler.ErrorResponse
@@ -71,7 +72,6 @@ type HistoryResponse struct {
 func Signup(c *gin.Context) {
 	var credentials SignupRequest
 
-	// sqlite 드라이버와 ShouldBindJSON의 호환성 문제로 인한 우회 코드
 	rawData, err := c.GetRawData()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
@@ -82,7 +82,6 @@ func Signup(c *gin.Context) {
 		return
 	}
 
-	// " "으로 입력되는 케이스 방지
 	if strings.TrimSpace(credentials.Username) == "" || strings.TrimSpace(credentials.Password) == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Username and Password cannot be empty"})
 		return
@@ -113,12 +112,16 @@ func Signup(c *gin.Context) {
 
 }
 
-// Login godoc
-// @Summary      로그인 (Login)
-// @Description  사용자명과 비밀번호로 로그인하고 JWT 토큰을 발급받습니다.
-// @Tags         User
+func TestGet(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"good": "ok"})
+}
+
+// @Summary      로그인
+// @Description  사용자 로그인을 처리합니다.
+// @Tags         Auth
 // @Accept       json
 // @Produce      json
+// @in header        Project-Secure header    string  true  "프로젝트 접근 보안 코드"
 // @Param        request body handler.LoginRequest true "로그인 요청 정보"
 // @Success      200 {object} handler.LoginSuccessResponse
 // @Failure      400 {object} handler.ErrorResponse "잘못된 요청"

@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>보이스피싱 시뮬레이터 통합 테스트 (v5)</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 20px; background-color: #f4f7f6; }
+        .container { max-width: 800px; margin: 0 auto; background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        h2 { border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; color: #333; }
+        .section { margin-bottom: 25px; padding-bottom: 20px; border-bottom: 1px dashed #eee; }
+        input[type="text"], input[type="password"], input[type="number"], select {
+            width: calc(100% - 24px); padding: 12px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px;
+        }
+        button {
+            background-color: #007aff; color: white; padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; margin-right: 10px; margin-bottom: 10px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #aaa; }
+        #log {
+            background-color: #282c34; color: #abb2bf; padding: 15px; border-radius: 8px; height: 200px; overflow-y: scroll; font-family: 'Courier New', Courier, monospace; line-height: 1.5; font-size: 14px;
+        }
+        #log div { padding: 2px 0; }
+        .status { padding: 10px; border-radius: 8px; margin-top: 10px; }
+        .status-success { background-color: #e6f7ec; color: #2d6b46; }
+        .status-error { background-color: #fdecea; color: #a5302f; }
+        .dot { height: 12px; width: 12px; background-color: #bbb; border-radius: 50%; display: inline-block; margin-right: 8px; }
+        #recording-dot { background-color: #f44336; animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* History 스타일 추가 */
+        .history-item { background: #f9f9f9; border: 1px solid #eee; padding: 15px; margin-bottom: 10px; border-radius: 8px; }
+        .history-info { margin-bottom: 8px; font-size: 14px; color: #555; }
+        .history-info strong { color: #333; font-size: 16px; }
+        audio { width: 100%; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>보이스피싱 시뮬레이터 통합 테스트 (v5)</h2>
+
+        <div class="section">
+            <h3>0. 인증 (Authentication)</h3>
+            <input type="text" id="username" placeholder="Username">
+            <input type="password" id="password" placeholder="Password">
+            
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="profileName" placeholder="이름 (예: 홍길동)">
+                <input type="number" id="profileAge" placeholder="나이 (예: 30)">
+                <input type="text" id="profileGender" placeholder="성별 (예: male/female)">
+            </div>
+
+            <button id="signupBtn">Sign Up (회원가입)</button>
+            <button id="loginBtn">Login (로그인)</button>
+            <div id="authStatus" class="status" style="display:none;"></div>
+        </div>
+
+        <div class="section">
+            <h3>1. 연결 설정 (Connection)</h3>
+            <label for="jwt">JWT Token:</label>
+            <input type="text" id="jwt" placeholder="로그인 시 자동으로 채워집니다.">
+            
+            <label for="scenario">Scenario:</label>
+            <select id="scenario">
+                <option value="institution_impersonation">기관 사칭 (검찰/경찰)</option>
+                <option value="loan_scam">대출 사기 (저금리 대환)</option>
+                <option value="friends_impersonation">지인 사칭 (메신저 피싱)</option>
+            </select>
+            
+            <label for="mode">Mode:</label>
+            <select id="mode">
+                <option value="text">Text (텍스트)</option>
+                <option value="voice">Voice (음성)</option>
+            </select>
+            <br>
+            
+            <button id="connectBtn">Connect & Start</button>
+            <button id="disconnectBtn" disabled>Disconnect & Stop</button>
+            <span id="recording-dot" class="dot" style="display:none;"></span>
+        </div>
+
+        <div class="section">
+            <h3>2. 시뮬레이션 (Simulation)</h3>
+            <div id="text-controls" style="display:none;">
+                <input type="text" id="message" placeholder="메시지를 입력하세요...">
+                <button id="sendTextBtn">Send Text</button>
+            </div>
+            <div id="log"></div>
+        </div>
+
+        <div class="section">
+            <h3>3. 통화 기록 (Call History)</h3>
+            <button id="loadHistoryBtn">🔄 기록 불러오기</button>
+            <div id="history-list">
+                <p style="color:#888;">'기록 불러오기' 버튼을 눌러주세요.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- DOM 요소 ---
+        const usernameInput = document.getElementById('username');
+        const passwordInput = document.getElementById('password');
+        const profileNameInput = document.getElementById('profileName');
+        const profileAgeInput = document.getElementById('profileAge');
+        const profileGenderInput = document.getElementById('profileGender');
+        const signupBtn = document.getElementById('signupBtn');
+        const loginBtn = document.getElementById('loginBtn');
+        const authStatus = document.getElementById('authStatus');
+        const jwtInput = document.getElementById('jwt');
+        
+        const scenarioSelect = document.getElementById('scenario');
+        const modeSelect = document.getElementById('mode');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const logEl = document.getElementById('log');
+        const recordingDot = document.getElementById('recording-dot');
+
+        const textControls = document.getElementById('text-controls');
+        const messageInput = document.getElementById('message');
+        const sendTextBtn = document.getElementById('sendTextBtn');
+
+        // History 관련 DOM
+        const loadHistoryBtn = document.getElementById('loadHistoryBtn');
+        const historyList = document.getElementById('history-list');
+
+        let ws = null;
+        let mediaRecorder = null;
+        let mediaStream = null;
+
+        // --- 기본 설정 ---
+        const API_BASE_URL = 'http://34.22.110.190:8080'; // 서버 주소
+
+        // --- 0. 인증 로직 ---
+        function setAuthStatus(message, isError = false) {
+            authStatus.textContent = message;
+            authStatus.className = isError ? 'status status-error' : 'status status-success';
+            authStatus.style.display = 'block';
+        }
+
+        signupBtn.onclick = () => {
+            const body = JSON.stringify({
+                username: usernameInput.value,
+                password: passwordInput.value,
+                profile: {
+                    name: profileNameInput.value || "Test User",
+                    age: parseInt(profileAgeInput.value) || 30,
+                    gender: profileGenderInput.value || "male"
+                }
+            });
+
+            fetch(`${API_BASE_URL}/signup`, {
+                method: 'POST',
+                headers: { 
+                'Content-Type': 'application/json',
+                'Secret-Key'  : 'dbdgkqqhdksvmfhwprxm2'
+                },
+                body: body 
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) setAuthStatus(`Signup Error: ${data.error}`, true);
+                else setAuthStatus(`Signup Success: ${data.message}`, false);
+            })
+            .catch(err => setAuthStatus(`Fetch Error: ${err}`, true));
+        };
+
+        loginBtn.onclick = () => {
+            const body = JSON.stringify({
+                username: usernameInput.value,
+                password: passwordInput.value
+            });
+
+            fetch(`${API_BASE_URL}/login`, {
+               headers: { 
+                'Content-Type': 'application/json',
+                'Secret-Key'  : 'dbdgkqqhdksvmfhwprxm2'
+                },
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    setAuthStatus(`Login Error: ${data.error}`, true);
+                } else if (data.token) {
+                    setAuthStatus('Login Success! Token received.', false);
+                    jwtInput.value = data.token; 
+                    // 로그인 성공 시 자동으로 기록 불러오기 시도
+                    loadHistory();
+                }
+            })
+            .catch(err => setAuthStatus(`Fetch Error: ${err}`, true));
+        };
+
+        // --- 1. WebSocket 연결 로직 ---
+        function logMessage(message, type = 'info') {
+            const div = document.createElement('div');
+            let color = '#abb2bf';
+            if (type === 'sent') color = '#98c379'; // green
+            else if (type === 'received') color = '#61afef'; // blue
+            else if (type === 'error') color = '#e06c75'; // red
+
+            div.innerHTML = `<span style="color: #5c6370;">${new Date().toLocaleTimeString()}</span> <span style="color:${color}">${message}</span>`;
+            logEl.appendChild(div);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        modeSelect.onchange = () => {
+            textControls.style.display = (modeSelect.value === 'text') ? 'block' : 'none';
+        };
+
+        connectBtn.onclick = async () => {
+            const token = jwtInput.value;
+            if (!token) return alert('로그인이 필요합니다.');
+            
+            connectBtn.disabled = true;
+            const mode = modeSelect.value;
+
+            // 음성 모드인 경우 마이크 권한 획득
+            if (mode === 'voice') {
+                try {
+                    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm; codecs=opus' });
+                } catch (err) {
+                    logMessage('Microphone Error: ' + err.message, 'error');
+                    connectBtn.disabled = false;
+                    return;
+                }
+            }
+
+            const url = `ws://localhost:8080/ws/simulation?token=${token}&scenario=${scenarioSelect.value}&mode=${mode}`;
+            ws = new WebSocket(url);
+
+            ws.onopen = () => {
+                logMessage('WebSocket Connected!', 'info');
+                disconnectBtn.disabled = false;
+
+                if (mode === 'voice' && mediaRecorder) {
+                    mediaRecorder.ondataavailable = (e) => {
+                        if (e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+                            ws.send(e.data);
+                        }
+                    };
+                    mediaRecorder.start(1000); // 1초 단위 전송
+                    recordingDot.style.display = 'inline-block';
+                    logMessage('🎙️ Recording started...', 'info');
+                }
+            };
+
+            ws.onmessage = (e) => {
+                if (e.data instanceof Blob) {
+                    logMessage(`🔊 Received Audio Blob: ${e.data.size} bytes`, 'received');
+                    const audioUrl = URL.createObjectURL(e.data);
+                    new Audio(audioUrl).play();
+                } else {
+                    logMessage(`📩 Server: ${e.data}`, 'received');
+                }
+            };
+
+            ws.onclose = () => {
+                logMessage('WebSocket Disconnected.', 'info');
+                stopSession();
+            };
+            ws.onerror = (err) => logMessage('WebSocket Error', 'error');
+        };
+
+        disconnectBtn.onclick = () => {
+            if (ws) ws.close();
+            stopSession();
+        };
+
+        function stopSession() {
+            if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop();
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(t => t.stop());
+                mediaStream = null;
+            }
+            recordingDot.style.display = 'none';
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+            ws = null;
+        }
+
+        // 텍스트 전송
+        sendTextBtn.onclick = () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const msg = messageInput.value;
+                ws.send(msg);
+                logMessage(`Me: ${msg}`, 'sent');
+                messageInput.value = '';
+            }
+        };
+
+        // --- 3. 통화 기록 (History) 로직 ---
+        loadHistoryBtn.onclick = loadHistory;
+
+        function loadHistory() {
+            const token = jwtInput.value;
+            if (!token) return alert('먼저 로그인을 해주세요.');
+
+            fetch(`${API_BASE_URL}/api/history`, {
+                method: 'GET',
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            .then(res => {
+                if (!res.ok) throw new Error('기록 조회 실패');
+                return res.json();
+            })
+            .then(data => {
+                historyList.innerHTML = '';
+                
+                if (!data.history || data.history.length === 0) {
+                    historyList.innerHTML = '<p>통화 기록이 없습니다.</p>';
+                    return;
+                }
+
+                data.history.forEach(item => {
+                    // 파일 경로에서 파일명 추출 (Windows '\' 및 Linux '/' 모두 대응)
+                    const filename = item.file_path.split(/[/\\]/).pop();
+                    
+                    // 오디오 소스 URL (토큰 포함)
+                    // 주의: auth middleware가 쿼리 파라미터(?token=)도 확인하도록 수정되어 있어야 함
+                    const audioSrc = `${API_BASE_URL}/api/audio/${filename}?token=${token}`;
+
+                    const div = document.createElement('div');
+                    div.className = 'history-item';
+                    div.innerHTML = `
+                        <div class="history-info">
+                            <strong>📞 ${item.scenario}</strong><br>
+                            <span style="font-size:12px; color:#888;">${new Date(item.created_at).toLocaleString()}</span>
+                        </div>
+                        <audio controls src="${audioSrc}" preload="none"></audio>
+                    `;
+                    historyList.appendChild(div);
+                });
+            })
+            .catch(err => {
+                console.error(err);
+                historyList.innerHTML = `<p style="color:red;">에러 발생: ${err.message}</p>`;
+            });
+        }
+
+    </script>
+</body>
+</html>
