@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -20,13 +20,7 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 
 	CheckOrigin: func(r *http.Request) bool {
-		expectedSecret := os.Getenv("PROJECT_ACCESS_CODE")
-		if expectedSecret == "" {
-			log.Println("Code is not set")
-			return false
-		}
-		receivedSecret := r.Header.Get("Project-Secret")
-		return receivedSecret == expectedSecret
+		return true
 	},
 }
 
@@ -39,25 +33,19 @@ type InitMessage struct {
 
 // HandleSimulationConnection godoc
 // @Summary      보이스피싱 시뮬레이션 시작 (WebSocket)
-// @Description  지정된 시나리오와 모드로 실시간 시뮬레이션을 위한 WebSocket 연결을 시작합니다.
+// @Description  웹소켓 연결을 수립합니다. 별도의 핸드쉐이크 인증은 없습니다.
 // @Description  <br>
-// @Description  **[중요]** 이것은 표준 HTTP API가 아닙니다. `ws://` 또는 `wss://` 스킴을 사용해야 합니다.
-// @Description  <br>
-// @Description  **[인증 및 초기화]**
-// @Description  WebSocket 연결이 성공하면, 클라이언트는 **반드시 첫 번째 메시지**로 다음 구조의 JSON을 전송해야 합니다.
+// @Description  **[중요]** 연결 수립 후 **5초 이내**에 반드시 인증(Init) 메시지를 보내야 합니다.
 // @Description  <pre><code>{
 // @Description    "type": "init",
-// @Description    "token": "YOUR_JWT_TOKEN_HERE",
-// @Description    "scenario": "loan_scam",
-// @Description    "mode": "voice"
+// @Description    "token": "eyJhbGciOiJIUz...",
+// @Description    "scenario": "...",
+// @Description    "mode": "..."
 // @Description  }</code></pre>
 // @Tags         Simulation (WebSocket)
-// @Accept       json
-// @Produce      json
-// @in header        Project-Secure header    string  true  "프로젝트 접근 보안 코드"
-// @Success      101      {string}  string  "Switching Protocols"
-// @Failure      400      {object}  map[string]string "잘못된 초기 메시지 (예: type != 'init', 잘못된 시나리오/모드)"
-// @Failure      401      {object}  map[string]string "인증 실패 (초기 메시지의 토큰이 유효하지 않음)"
+// @Success      101  {string} string "Switching Protocols"
+// @Failure      400  {object} map[string]string "Invalid Init Message"
+// @Failure      401      {object}  map[string]string "Invalid Token"
 // @Router       /ws/simulation [get]
 func HandleSimulationConnection(c *gin.Context) {
 	// WebSocket 연결 업그레이드과 종료
@@ -67,7 +55,9 @@ func HandleSimulationConnection(c *gin.Context) {
 		return
 	}
 	defer conn.Close()
-	conn.SetReadLimit(10485760) // DoS 방지용 최대 메시지 크기 제한, 10MB
+
+	conn.SetReadLimit(10485760)                            // DoS 방지용 최대 메시지 크기 제한, 10MB
+	conn.SetReadDeadline(time.Now().Add(12 * time.Second)) // 인증 시간 제한
 
 	var initMsg InitMessage
 	if err := conn.ReadJSON(&initMsg); err != nil {
@@ -87,6 +77,8 @@ func HandleSimulationConnection(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 		return
 	}
+
+	conn.SetReadDeadline(time.Time{}) // Time Out 해제
 
 	username := claims.Username
 	scenarioKey := initMsg.Scenario

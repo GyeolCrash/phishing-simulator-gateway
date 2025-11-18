@@ -40,6 +40,9 @@ func init() {
 // @in header
 // @name Authorization
 // @description Bearer 토큰 형식, Bearer {token}
+// @securityDefinitions.apikey AccessCodeAuth
+// @in header
+// @name Project-Secure
 func main() {
 	storage.InitDB()
 	router := gin.Default()
@@ -80,6 +83,6 @@ func main() {
 	router.GET("/ws/simulation", handler.HandleSimulationConnection)
 
 	// Swagger
-	router.GET("/swagger/*any", ginSwagger.WrapHandler((swaggerFiles.Handler)))
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	log.Fatal(router.Run(":8080"))
 }

@@ -60,10 +60,10 @@ type HistoryResponse struct {
 // Signup godoc
 // @Summary      회원가입 (Signup)
 // @Description  새로운 사용자 계정을 생성합니다.
-// @Tags         User
+// @Tags         Auth
 // @Accept       json
 // @Produce      json
-// @in header        Project-Secure header    string  true  "프로젝트 접근 보안 코드"
+// @Security	 AccessCodeAuth
 // @Param        request body handler.SignupRequest true "회원가입 요청 정보"
 // @Success      200 {object} handler.SuccessResponse
 // @Failure      400 {object} handler.ErrorResponse
@@ -121,7 +121,7 @@ func TestGet(c *gin.Context) {
 // @Tags         Auth
 // @Accept       json
 // @Produce      json
-// @in header        Project-Secure header    string  true  "프로젝트 접근 보안 코드"
+// @Security	 AccessCodeAuth
 // @Param        request body handler.LoginRequest true "로그인 요청 정보"
 // @Success      200 {object} handler.LoginSuccessResponse
 // @Failure      400 {object} handler.ErrorResponse "잘못된 요청"
