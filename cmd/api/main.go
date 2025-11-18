@@ -47,12 +47,6 @@ func main() {
 	// CORS 설정
 	config := cors.DefaultConfig()
 
-	// CORS는 브라우저 전용 보안 규칙, 안드로이드는 OS가 직접 통신하므로 적용되지 않음
-	config.AllowOrigins = []string{
-		"http://localhost:8080",
-		"http://34.22.110.190",
-	}
-
 	// config.AllowAllOrigins = true // 경고: 실제 배포 시에는 특정 도메인으로 제한해야 함
 	config.AllowHeaders = append(config.AllowHeaders, "Authorization")
 	config.AllowCredentials = true
