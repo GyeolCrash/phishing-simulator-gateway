@@ -138,7 +138,7 @@
         },
         "/login": {
             "post": {
-                "description": "사용자명과 비밀번호로 로그인하고 JWT 토큰을 발급받습니다.",
+                "description": "사용자 로그인을 처리합니다.",
                 "consumes": [
                     "application/json"
                 ],
@@ -146,9 +146,9 @@
                     "application/json"
                 ],
                 "tags": [
-                    "User"
+                    "Auth"
                 ],
-                "summary": "로그인 (Login)",
+                "summary": "로그인",
                 "parameters": [
                     {
                         "description": "로그인 요청 정보",
@@ -236,7 +236,7 @@
         },
         "/ws/simulation": {
             "get": {
-                "description": "지정된 시나리오와 모드로 실시간 시뮬레이션을 위한 WebSocket 연결을 시작합니다.\n\u003cbr\u003e\n**[중요]** 이것은 표준 HTTP API가 아닙니다. `ws://` 또는 `wss://` 스킴을 사용해야 합니다.\n**인증:** WebSocket 연결 시에는 HTTP Header를 사용할 수 없으므로, **Query Parameter(`token`)**로 JWT를 전달해야 합니다.",
+                "description": "지정된 시나리오와 모드로 실시간 시뮬레이션을 위한 WebSocket 연결을 시작합니다.\n\u003cbr\u003e\n**[중요]** 이것은 표준 HTTP API가 아닙니다. `ws://` 또는 `wss://` 스킴을 사용해야 합니다.\n\u003cbr\u003e\n**[인증 및 초기화]**\nWebSocket 연결이 성공하면, 클라이언트는 **반드시 첫 번째 메시지**로 다음 구조의 JSON을 전송해야 합니다.\n\u003cpre\u003e\u003ccode\u003e{\n\"type\": \"init\",\n\"token\": \"YOUR_JWT_TOKEN_HERE\",\n\"scenario\": \"loan_scam\",\n\"mode\": \"voice\"\n}\u003c/code\u003e\u003c/pre\u003e",
                 "consumes": [
                     "application/json"
                 ],
@@ -247,29 +247,6 @@
                     "Simulation (WebSocket)"
                 ],
                 "summary": "보이스피싱 시뮬레이션 시작 (WebSocket)",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Bearer 토큰 (접두사 없이 토큰 값만 입력)",
-                        "name": "token",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "시나리오 키 (예: loan_scam, institution_impersonation)",
-                        "name": "scenario",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "모드 선택 (text: 텍스트 채팅, voice: 실시간 음성 통화)",
-                        "name": "mode",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
                 "responses": {
                     "101": {
                         "description": "Switching Protocols",
@@ -278,7 +255,7 @@
                         }
                     },
                     "400": {
-                        "description": "잘못된 파라미터",
+                        "description": "잘못된 초기 메시지 (예: type != 'init', 잘못된 시나리오/모드)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -287,7 +264,7 @@
                         }
                     },
                     "401": {
-                        "description": "인증 실패",
+                        "description": "인증 실패 (초기 메시지의 토큰이 유효하지 않음)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
