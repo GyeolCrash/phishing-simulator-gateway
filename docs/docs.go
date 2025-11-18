@@ -145,6 +145,11 @@ const docTemplate = `{
         },
         "/login": {
             "post": {
+                "security": [
+                    {
+                        "AccessCodeAuth": []
+                    }
+                ],
                 "description": "사용자 로그인을 처리합니다.",
                 "consumes": [
                     "application/json"
@@ -197,6 +202,11 @@ const docTemplate = `{
         },
         "/signup": {
             "post": {
+                "security": [
+                    {
+                        "AccessCodeAuth": []
+                    }
+                ],
                 "description": "새로운 사용자 계정을 생성합니다.",
                 "consumes": [
                     "application/json"
@@ -205,7 +215,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "User"
+                    "Auth"
                 ],
                 "summary": "회원가입 (Signup)",
                 "parameters": [
@@ -243,13 +253,7 @@ const docTemplate = `{
         },
         "/ws/simulation": {
             "get": {
-                "description": "지정된 시나리오와 모드로 실시간 시뮬레이션을 위한 WebSocket 연결을 시작합니다.\n\u003cbr\u003e\n**[중요]** 이것은 표준 HTTP API가 아닙니다. ` + "`" + `ws://` + "`" + ` 또는 ` + "`" + `wss://` + "`" + ` 스킴을 사용해야 합니다.\n\u003cbr\u003e\n**[인증 및 초기화]**\nWebSocket 연결이 성공하면, 클라이언트는 **반드시 첫 번째 메시지**로 다음 구조의 JSON을 전송해야 합니다.\n\u003cpre\u003e\u003ccode\u003e{\n\"type\": \"init\",\n\"token\": \"YOUR_JWT_TOKEN_HERE\",\n\"scenario\": \"loan_scam\",\n\"mode\": \"voice\"\n}\u003c/code\u003e\u003c/pre\u003e",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
+                "description": "웹소켓 연결을 수립합니다. 별도의 핸드쉐이크 인증은 없습니다.\n\u003cbr\u003e\n**[중요]** 연결 수립 후 **5초 이내**에 반드시 인증(Init) 메시지를 보내야 합니다.\n\u003cpre\u003e\u003ccode\u003e{\n\"type\": \"init\",\n\"token\": \"eyJhbGciOiJIUz...\",\n\"scenario\": \"...\",\n\"mode\": \"...\"\n}\u003c/code\u003e\u003c/pre\u003e",
                 "tags": [
                     "Simulation (WebSocket)"
                 ],
@@ -262,7 +266,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "잘못된 초기 메시지 (예: type != 'init', 잘못된 시나리오/모드)",
+                        "description": "Invalid Init Message",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -271,7 +275,7 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "인증 실패 (초기 메시지의 토큰이 유효하지 않음)",
+                        "description": "Invalid Token",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -387,6 +391,11 @@ const docTemplate = `{
         }
     },
     "securityDefinitions": {
+        "AccessCodeAuth": {
+            "type": "apiKey",
+            "name": "Project-Secure",
+            "in": "header"
+        },
         "BearerAuth": {
             "description": "Bearer 토큰 형식, Bearer {token}",
             "type": "apiKey",

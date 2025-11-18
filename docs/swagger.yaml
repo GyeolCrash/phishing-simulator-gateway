@@ -186,6 +186,8 @@ paths:
           description: 서버 내부 오류
           schema:
             $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - AccessCodeAuth: []
       summary: 로그인
       tags:
       - Auth
@@ -216,41 +218,36 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - AccessCodeAuth: []
       summary: 회원가입 (Signup)
       tags:
-      - User
+      - Auth
   /ws/simulation:
     get:
-      consumes:
-      - application/json
       description: |-
-        지정된 시나리오와 모드로 실시간 시뮬레이션을 위한 WebSocket 연결을 시작합니다.
+        웹소켓 연결을 수립합니다. 별도의 핸드쉐이크 인증은 없습니다.
         <br>
-        **[중요]** 이것은 표준 HTTP API가 아닙니다. `ws://` 또는 `wss://` 스킴을 사용해야 합니다.
-        <br>
-        **[인증 및 초기화]**
-        WebSocket 연결이 성공하면, 클라이언트는 **반드시 첫 번째 메시지**로 다음 구조의 JSON을 전송해야 합니다.
+        **[중요]** 연결 수립 후 **5초 이내**에 반드시 인증(Init) 메시지를 보내야 합니다.
         <pre><code>{
         "type": "init",
-        "token": "YOUR_JWT_TOKEN_HERE",
-        "scenario": "loan_scam",
-        "mode": "voice"
+        "token": "eyJhbGciOiJIUz...",
+        "scenario": "...",
+        "mode": "..."
         }</code></pre>
-      produces:
-      - application/json
       responses:
         "101":
           description: Switching Protocols
           schema:
             type: string
         "400":
-          description: '잘못된 초기 메시지 (예: type != ''init'', 잘못된 시나리오/모드)'
+          description: Invalid Init Message
           schema:
             additionalProperties:
               type: string
             type: object
         "401":
-          description: 인증 실패 (초기 메시지의 토큰이 유효하지 않음)
+          description: Invalid Token
           schema:
             additionalProperties:
               type: string
@@ -259,6 +256,10 @@ paths:
       tags:
       - Simulation (WebSocket)
 securityDefinitions:
+  AccessCodeAuth:
+    in: header
+    name: Project-Secure
+    type: apiKey
   BearerAuth:
     description: Bearer 토큰 형식, Bearer {token}
     in: header
