@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>보이스피싱 시뮬레이터 통합 테스트 (v6 - Init Message)</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 20px; background-color: #f4f7f6; }
+        .container { max-width: 800px; margin: 0 auto; background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        h2 { border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; color: #333; }
+        .section { margin-bottom: 25px; padding-bottom: 20px; border-bottom: 1px dashed #eee; }
+        input[type="text"], input[type="password"], input[type="number"], select {
+            width: calc(100% - 24px); padding: 12px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px;
+        }
+        button {
+            background-color: #007aff; color: white; padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; margin-right: 10px; margin-bottom: 10px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #aaa; }
+        #log {
+            background-color: #282c34; color: #abb2bf; padding: 15px; border-radius: 8px; height: 300px; overflow-y: scroll; font-family: 'Courier New', Courier, monospace; line-height: 1.5; font-size: 14px;
+        }
+        #log div { padding: 2px 0; }
+        .status { padding: 10px; border-radius: 8px; margin-top: 10px; }
+        .status-success { background-color: #e6f7ec; color: #2d6b46; }
+        .status-error { background-color: #fdecea; color: #a5302f; }
+        .dot { height: 12px; width: 12px; background-color: #bbb; border-radius: 50%; display: inline-block; margin-right: 8px; }
+        #recording-dot { background-color: #f44336; animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>보이스피싱 시뮬레이터 테스트 (Init 방식)</h2>
+
+        <div class="section">
+            <h3>0. 인증 (Authentication)</h3>
+            <input type="text" id="username" placeholder="Username" value="">
+            <input type="password" id="password" placeholder="Password" value="">
+            
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="profileName" placeholder="이름" value="">
+                <input type="number" id="profileAge" placeholder="나이" value="">
+                <input type="text" id="profileGender" placeholder="성별" value="">
+            </div>
+
+            <button id="signupBtn">Sign Up</button>
+            <button id="loginBtn">Login</button>
+            <div id="authStatus" class="status" style="display:none;"></div>
+        </div>
+
+        <div class="section">
+            <h3>1. 연결 설정 (WebSocket Upgrade)</h3>
+            <label for="jwt">JWT Token:</label>
+            <input type="text" id="jwt" placeholder="로그인 시 자동 입력됨">
+            
+            <label for="scenario">Scenario:</label>
+            <select id="scenario">
+                <option value="loan_scam">대출 사기 (loan_scam)</option>
+                <option value="institution_impersonation">기관 사칭 (institution_impersonation)</option>
+            </select>
+            
+            <label for="mode">Mode:</label>
+            <select id="mode">
+                <option value="text">Text (텍스트 채팅)</option>
+                <option value="voice">Voice (음성 통화)</option>
+            </select>
+            <br>
+            
+            <button id="connectBtn">Connect (WebSocket)</button>
+            <button id="disconnectBtn" disabled>Disconnect</button>
+            <span id="recording-dot" class="dot" style="display:none;"></span>
+        </div>
+
+        <div class="section">
+            <h3>2. 시뮬레이션 로그</h3>
+            <div id="text-controls" style="display:none;">
+                <input type="text" id="message" placeholder="메시지 입력 후 엔터...">
+                <button id="sendTextBtn">전송</button>
+            </div>
+            <div id="log"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- 설정 ---
+        //34.22.110.190
+        const API_BASE_URL = 'http://localhost:8080'; 
+        const WS_BASE_URL = 'ws://localhost:8080';
+        // 만약 HTTP 요청에도 헤더가 필요하다면 아래 값을 설정하세요.
+        const PROJECT_SECRET = 'dbdgkqqhdksvmfhwprxm2'; // 예: 'dbdgkqqhdksvmfhwprxm2'
+
+        // --- DOM Elements ---
+        const usernameInput = document.getElementById('username');
+        const passwordInput = document.getElementById('password');
+        const profileNameInput = document.getElementById('profileName');
+        const profileAgeInput = document.getElementById('profileAge');
+        const profileGenderInput = document.getElementById('profileGender');
+        const signupBtn = document.getElementById('signupBtn');
+        const loginBtn = document.getElementById('loginBtn');
+        const authStatus = document.getElementById('authStatus');
+        const jwtInput = document.getElementById('jwt');
+        
+        const scenarioSelect = document.getElementById('scenario');
+        const modeSelect = document.getElementById('mode');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const logEl = document.getElementById('log');
+        const recordingDot = document.getElementById('recording-dot');
+        const textControls = document.getElementById('text-controls');
+        const messageInput = document.getElementById('message');
+        const sendTextBtn = document.getElementById('sendTextBtn');
+
+        let ws = null;
+        let mediaRecorder = null;
+        let mediaStream = null;
+
+        
+
+        // --- Helper: Log ---
+        function logMessage(message, type = 'info') {
+            const div = document.createElement('div');
+            let color = '#abb2bf';
+            if (type === 'sent') color = '#98c379';
+            else if (type === 'received') color = '#61afef';
+            else if (type === 'error') color = '#e06c75';
+            else if (type === 'system') color = '#d19a66';
+
+            div.innerHTML = `<span style="color: #5c6370;">[${new Date().toLocaleTimeString()}]</span> <span style="color:${color}">${message}</span>`;
+            logEl.appendChild(div);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        function setAuthStatus(msg, isError) {
+            authStatus.textContent = msg;
+            authStatus.className = isError ? 'status status-error' : 'status status-success';
+            authStatus.style.display = 'block';
+        }
+
+        function getHeaders() {
+            
+            const headers = { 'Content-Type': 'application/json', 'Project-Secure': PROJECT_SECRET};
+            return headers;
+        }
+
+        // --- 0. Auth Logic ---
+        signupBtn.onclick = () => {
+            fetch(`${API_BASE_URL}/signup`, {
+                method: 'POST',
+                headers: getHeaders(),
+                body: JSON.stringify({
+                    username: usernameInput.value,
+                    password: passwordInput.value,
+                    profile: {
+                        name: profileNameInput.value,
+                        age: parseInt(profileAgeInput.value),
+                        gender: profileGenderInput.value
+                    }
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) setAuthStatus(data.error, true);
+                else setAuthStatus('회원가입 성공', false);
+            })
+            .catch(err => setAuthStatus('Error: ' + err, true));
+        };
+
+        loginBtn.onclick = () => {
+            fetch(`${API_BASE_URL}/login`, {
+                method: 'POST',
+                headers: getHeaders(),
+                body: JSON.stringify({
+                    username: usernameInput.value,
+                    password: passwordInput.value
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    setAuthStatus(data.error, true);
+                } else {
+                    setAuthStatus('로그인 성공! 토큰 획득.', false);
+                    jwtInput.value = data.token;
+                }
+            })
+            .catch(err => setAuthStatus('Error: ' + err, true));
+        };
+
+        // --- 1. WebSocket Logic (수정된 부분) ---
+        connectBtn.onclick = async () => {
+            const token = jwtInput.value;
+            if (!token) return alert('먼저 로그인을 해주세요 (JWT 필요)');
+
+            // UI 초기화
+            connectBtn.disabled = true;
+            logEl.innerHTML = ''; // 로그 초기화
+            
+            const mode = modeSelect.value;
+
+            // 음성 모드일 경우 마이크 권한 획득
+            if (mode === 'voice') {
+                try {
+                    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm; codecs=opus' });
+                } catch (err) {
+                    alert('마이크 권한이 필요합니다.');
+                    connectBtn.disabled = false;
+                    return;
+                }
+            }
+
+            // [핵심 변경] URL에 쿼리 파라미터 없이 깔끔하게 연결
+            //const wsUrl = `${WS_BASE_URL}/ws/simulation?token=${token}&scenario=${scenarioSelect.value}&mode=${mode}`;
+            const wsUrl = `${WS_BASE_URL}/ws/simulation`;
+            logMessage(`Connecting to ${wsUrl}...`, 'system');
+            
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+            logMessage('Connection Established. Sending Init Message...', 'system');
+    
+            const initData = {
+            type: "init",
+            token: token,
+            scenario: scenarioSelect.value,
+            mode: mode
+        };
+        ws.send(JSON.stringify(initData));
+
+        // [수정됨] 서버 응답을 기다리지 않고, 연결 즉시 마이크를 켜서 데이터를 쏘기 시작합니다.
+        // 이렇게 해야 서버 STT가 타임아웃(Silence Timeout)에 걸리지 않습니다.
+        if (mode === 'voice' && mediaRecorder && mediaRecorder.state === 'inactive') {
+            logMessage('🚀 Connection opened, starting microphone immediately...', 'system');
+            startRecording();
+        }
+    };
+            ws.onmessage = (e) => {
+        try {
+        const data = JSON.parse(e.data);
+        if (data.error) {
+            logMessage(`Server Error: ${data.error}`, 'error');
+        } else {
+            logMessage(`Server: ${JSON.stringify(data)}`, 'received');
+        }
+    } catch (err) {
+        if (e.data instanceof Blob) {
+            logMessage(`Audio received (${e.data.size} bytes)`, 'received');
+            const audioUrl = URL.createObjectURL(e.data);
+            new Audio(audioUrl).play();
+
+            // [추가됨] 만약 아직 녹음이 안 켜져 있다면, 오디오를 듣는 순간이라도 켜야 합니다.
+            if (mode === 'voice' && mediaRecorder && mediaRecorder.state === 'inactive') {
+                console.log("Audio received, ensuring microphone is on.");
+                startRecording();
+            }
+        } else {
+             logMessage(e.data, 'received');
+        }
+    }
+};
+
+            ws.onclose = (e) => {
+                logMessage(`Disconnected (Code: ${e.code})`, 'system');
+                stopSession();
+            };
+
+            ws.onerror = (err) => {
+                logMessage('WebSocket Error occurred', 'error');
+            };
+        };
+
+        disconnectBtn.onclick = () => {
+            if (ws) ws.close();
+        };
+
+        function startRecording() {
+        logMessage('🎙️ Voice Recording Started...', 'system');
+        recordingDot.style.display = 'inline-block';
+    
+        mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0 && ws && ws.readyState === WebSocket.OPEN) {
+            // [디버깅용 로그] 실제로 데이터가 나가는지 확인
+                console.log(`Microphone sending chunk: ${e.data.size} bytes`); 
+                ws.send(e.data); 
+            } else {
+                console.log("Microphone data empty or WS not ready");
+        }
+    };
+    // STT 실시간성을 위해 1초(1000ms)보다는 짧게 잡는 것이 좋습니다 (예: 250ms ~ 500ms)
+    // 너무 길면 첫 마디가 늦게 전송되어 타임아웃 될 수 있습니다.
+    mediaRecorder.start(500); 
+}
+
+function stopSession() {
+    // 1. 미디어(마이크) 리소스 정리
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+    }
+    if (mediaStream) {
+        mediaStream.getTracks().forEach(track => track.stop());
+        mediaStream = null;
+    }
+    
+    // 2. 웹소켓 객체 정리 (이벤트 핸들러 제거 후 종료)
+    if (ws) {
+        ws.onclose = null; // 무한 루프 방지
+        ws.onerror = null;
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+            ws.close();
+        }
+        ws = null;
+    }
+    
+    // 3. UI 상태 '대기 모드'로 원상 복구
+    connectBtn.disabled = false;      // 연결 버튼 활성화
+    disconnectBtn.disabled = true;    // 끊기 버튼 비활성화
+    recordingDot.style.display = 'none';
+    
+    // [중요] 연결이 끊겨도 텍스트 입력창은 굳이 숨길 필요 없음 (모드 설정에 따름)
+    // 또는 '전송' 버튼만 비활성화하고 싶다면 아래 updateInputVisibility() 활용
+    updateInputVisibility(); 
+    
+    logMessage('Session ended. Ready to reconnect.', 'system');
+}
+
+        // 텍스트 모드 UI 처리
+        // [수정] 텍스트 모드 UI 처리 함수 분리
+        function updateInputVisibility() {
+            if (modeSelect.value === 'text') {
+                textControls.style.display = 'block';
+        // 입력창에 바로 포커스 주면 편의성 UP
+                messageInput.focus(); 
+            } else {
+            textControls.style.display = 'none';
+        }
+    }
+
+// 이벤트 리스너 연결
+modeSelect.onchange = updateInputVisibility;
+
+// [핵심] 페이지 로드 시점에도 한 번 실행하여 초기 상태를 잡아줌
+updateInputVisibility();
+
+        sendTextBtn.onclick = () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const text = messageInput.value;
+                ws.send(JSON.stringify({ type: "text", content: text })); // JSON으로 감싸서 보내는 것을 권장 (서버 구현에 따라 다름)
+                // 단순 문자열로 보낸다면: ws.send(text); 
+                logMessage(`Me: ${text}`, 'sent');
+                messageInput.value = '';
+            }
+        };
+        
+        // 엔터키 전송
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendTextBtn.click();
+        });
+
+    </script>
+</body>
+</html>
