@@ -18,7 +18,7 @@ func AccessCodeMiddleware() gin.HandlerFunc {
 		clientKey := c.GetHeader("Project-Secure")
 
 		if clientKey != accessCode {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Invaid Code"})
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Invalid Access Code"})
 			return
 		}
 		c.Next()

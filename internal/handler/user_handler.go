@@ -112,10 +112,6 @@ func Signup(c *gin.Context) {
 
 }
 
-func TestGet(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"good": "ok"})
-}
-
 // @Summary      로그인
 // @Description  사용자 로그인을 처리합니다.
 // @Tags         Auth

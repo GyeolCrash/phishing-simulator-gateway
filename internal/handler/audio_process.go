@@ -5,7 +5,6 @@ import (
 	"PishingSimulator_SecurityProject/internal/llm"
 	"PishingSimulator_SecurityProject/internal/models"
 	"strings"
-	"sync"
 	"time"
 
 	"context"
@@ -33,7 +32,6 @@ func orchestrateAudioSession(
 	defer close(archiveC2SChan)
 	defer close(archiveS2CChan)
 
-	// 1. STT & TTS 클라이언트 생성
 	sttRecognizer, err := llm.NewStreamingRecognizer(parentCtx)
 	if err != nil {
 		log.Printf("orchestrateAudioSession(): Failed to create STT: %v", err)
@@ -60,14 +58,15 @@ func orchestrateAudioSession(
 		llm.ClearSession(llmSessionID)
 	}()
 
-	// 상태 관리 (말하는 중에는 듣지 않음 - Half Duplex 유사 동작)
-	var isListening = true
-	var stateMutex sync.Mutex
-	var lastFinalText string = ""
+	/*
+		// 상태 관리 (말하는 중에는 듣지 않음 - Half Duplex 유사 동작)
+		var isListening = true
+		var stateMutex sync.Mutex
+		var lastFinalText string = ""
+	*/
 
 	// 3. 초기 인사말 처리 (LLM InitSession)
 	go func() {
-		// [변경] 하드코딩된 텍스트 대신 LLM 서버에 초기화 요청
 		log.Printf("orchestrateAudioSession(): Initializing LLM session...")
 		initialUtterance, err := llm.InitSession(llmSessionID, scenarioKey, user.Profile, parentCtx)
 		if err != nil {
@@ -91,6 +90,8 @@ func orchestrateAudioSession(
 	sttResultChan := make(chan string, 10)
 	sttErrChan := make(chan error, 1)
 
+	// 솔직히 난 왜 State Machine이 필요한지 모르겠음 ㅇㅇ
+
 	// STT 수신 고루틴 시작
 	go sttRecognizer.ReceiveTranslatedText(sttResultChan, sttErrChan)
 
@@ -111,34 +112,39 @@ func orchestrateAudioSession(
 			// 무조건 아카이빙
 			archiveC2SChan <- audioChunk
 
-			// 상태에 따라 STT 전송 여부 결정
-			stateMutex.Lock()
-			currentListeningState := isListening
-			stateMutex.Unlock()
+			/*
+				// 상태에 따라 STT 전송 여부 결정
+				stateMutex.Lock()
+				currentListeningState := isListening
+				stateMutex.Unlock()
 
-			if currentListeningState {
-				if err := sttRecognizer.SendAudio(audioChunk); err != nil {
-					log.Printf("Failed to send audio to STT: %v", err)
+
+				if currentListeningState {
+					if err := sttRecognizer.SendAudio(audioChunk); err != nil {
+						log.Printf("Failed to send audio to STT: %v", err)
+					}
 				}
-			}
+			*/
 
 		// [텍스트 수신] STT -> Logic
 		case userText := <-sttResultChan:
 			sttFinalTime := time.Since(sessionStartTime)
 			cleanedText := strings.TrimSpace(userText)
 
-			stateMutex.Lock()
-			// 듣기 모드가 아니거나, 빈 텍스트거나, 중복된 텍스트면 무시
-			if !isListening || cleanedText == "" || cleanedText == lastFinalText {
+			/*
+				stateMutex.Lock()
+				// 듣기 모드가 아니거나, 빈 텍스트거나, 중복된 텍스트면 무시
+				if !isListening || cleanedText == "" || cleanedText == lastFinalText {
+					stateMutex.Unlock()
+					continue
+				}
+
+				// 유효한 입력이 들어오면 즉시 듣기 중단 (AI가 답변 준비)
+				isListening = false
+				lastFinalText = userText
 				stateMutex.Unlock()
-				continue
-			}
 
-			// 유효한 입력이 들어오면 즉시 듣기 중단 (AI가 답변 준비)
-			isListening = false
-			lastFinalText = userText
-			stateMutex.Unlock()
-
+			*/
 			log.Printf("orchestrateAudioSession(): STT [FINAL] -> %s", userText)
 
 			// [변경] 별도 고루틴에서 LLM 호출 -> TTS -> 전송 수행
@@ -150,9 +156,11 @@ func orchestrateAudioSession(
 				if err != nil {
 					log.Printf("orchestrateAudioSession(): LLM Chat Error: %v", err)
 					// 에러 발생 시 다시 듣기 모드로 복구해야 함
-					stateMutex.Lock()
-					isListening = true
-					stateMutex.Unlock()
+					/*
+						stateMutex.Lock()
+						isListening = true
+						stateMutex.Unlock()
+					*/
 					return
 				}
 
@@ -169,11 +177,13 @@ func orchestrateAudioSession(
 					serverChan <- responseAudio
 				}
 
-				// D. 처리 완료 후 다시 듣기 모드 활성화
-				stateMutex.Lock()
-				isListening = true
-				log.Printf("... (State change: NOW LISTENING)")
-				stateMutex.Unlock()
+				/*
+					// D. 처리 완료 후 다시 듣기 모드 활성화
+					stateMutex.Lock()
+					isListening = true
+					log.Printf("... (State change: NOW LISTENING)")
+					stateMutex.Unlock()
+				*/
 
 			}(cleanedText, sttFinalTime)
 
@@ -323,11 +333,13 @@ func archiveAudioConversation(username string, archiver *archiver.Archiver, c2sI
 			log.Printf("runArchivingLogic(): Canceled for %s", username)
 			return
 		case chunk := <-c2sIn:
+			// Interdium 반복 재생, 테스트용
 			/*
 				if !ok {
 					// archiver.WriteC2S(chunk)
 					return
-				}*/
+				}
+			*/
 			archiver.WriteC2S(chunk)
 		case job, ok := <-s2cIn:
 			if !ok {

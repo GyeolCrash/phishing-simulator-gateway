@@ -410,3 +410,5 @@ data/
 temp_test/*
 *.mp3
 *.db
+cogent-mark-477406-f9-07355b385729.json
+cmd/api/pishing_simulator.db
