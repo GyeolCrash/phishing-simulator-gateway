@@ -57,7 +57,7 @@ func main() {
 	config := cors.DefaultConfig()
 
 	config.AllowAllOrigins = true // 경고: 실제 배포 시에는 특정 도메인으로 제한해야 함
-	config.AllowHeaders = append(config.AllowHeaders /*, "Project-Secure"*/, "Authorization")
+	config.AllowHeaders = append(config.AllowHeaders, "Authorization", "Project-Secure")
 	config.AllowCredentials = true
 
 	router.Use(cors.New(config))
