@@ -11,18 +11,22 @@ import (
 	"time"
 )
 
-const llmBaseURL = "http://localhost:8001" // LLM 서버의 기본 URL
-var httpClient = &http.Client{Timeout: 10 * time.Second}
+const llmBaseURL = "http://localhost:8088" // LLM 서버의 기본 URL
+var httpClient = &http.Client{Timeout: 120 * time.Second}
 
 type InitRequest struct {
-	SessionID   string             `json:"session_id"`
-	Scenario    string             `json:"scenario"`
-	UserInfo    models.UserProfile `json:"user_info"`
-	Temperature float64            `json:"temperature"`
+	SessionID        string             `json:"session_id"`
+	Scenario         string             `json:"scenario"`
+	UserInfo         models.UserProfile `json:"user_info"`
+	Temperature      float64            `json:"temperature"`
+	UseLLMTransition bool               `json:"use_llm_transition"`
 }
 
 type InitResponse struct {
-	Utterance string `json:"utterance"`
+	InitialMessage struct {
+		Utterance string `json:"utterance"`
+		NextStep  string `json:"next_step"`
+	} `json:"initial_message"`
 }
 
 type ChatRequest struct {
@@ -30,9 +34,16 @@ type ChatRequest struct {
 	UserText  string `json:"user_text"`
 }
 
+// [변경 4] Python 응답: { "response": { "utterance": "..." }, "simulation_ended": true }
 type ChatResponse struct {
-	Utterance string `json:"utterance"`
-	NextStep  string `json:"next_step"`
+	Response struct {
+		Utterance string `json:"utterance"`
+		NextStep  string `json:"next_step"`
+	} `json:"response"`
+	SimulationEnded bool    `json:"simulation_ended"`
+	EndReason       string  `json:"end_reason"`
+	Feedback        string  `json:"feedback"`
+	Score           float64 `json:"score"`
 }
 
 type ControlRequest struct {
@@ -41,10 +52,11 @@ type ControlRequest struct {
 
 func InitSession(sessionID, scenarioKey string, userInfo models.UserProfile, ctx context.Context) (string, error) {
 	reqBody, err := json.Marshal(InitRequest{
-		SessionID:   sessionID,
-		Scenario:    scenarioKey,
-		UserInfo:    userInfo,
-		Temperature: 0.7,
+		SessionID:        sessionID,
+		Scenario:         scenarioKey,
+		UserInfo:         userInfo,
+		Temperature:      0.3,  // 시나리오 권장값
+		UseLLMTransition: true, // LLM 전환 사용
 	})
 	if err != nil {
 		return "", err
@@ -54,7 +66,7 @@ func InitSession(sessionID, scenarioKey string, userInfo models.UserProfile, ctx
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Context-Type", "application/json")
+	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -70,7 +82,7 @@ func InitSession(sessionID, scenarioKey string, userInfo models.UserProfile, ctx
 	if err := json.NewDecoder(resp.Body).Decode(&initResp); err != nil {
 		return "", err
 	}
-	return initResp.Utterance, nil
+	return initResp.InitialMessage.Utterance, nil
 }
 
 func Chat(sessionID, text string, ctx context.Context) (*ChatResponse, error) {
@@ -86,7 +98,7 @@ func Chat(sessionID, text string, ctx context.Context) (*ChatResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Context-Type", "application/json")
+	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {

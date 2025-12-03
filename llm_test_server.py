@@ -5,6 +5,7 @@ import json
 from pydantic import BaseModel
 from typing import Optional, Dict, List
 from openai import OpenAI
+import uvicorn
 
 # === 설정 ===
 app = FastAPI()
@@ -164,5 +165,9 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={"detail": error_details, "body": body.decode('utf-8')},
     )
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8001)
+
 
 # 서버 실행: uvicorn server:app --host 0.0.0.0 --port 8001 --reload

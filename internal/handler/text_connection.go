@@ -5,6 +5,7 @@ import (
 	"PishingSimulator_SecurityProject/internal/models"
 	"context"
 	"log"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -65,9 +66,22 @@ ReadLoop:
 			}
 
 			// LLM 응답을 클라이언트에 전송한다.
-			log.Printf("LLM response for user %s: %s", user.Username, chatResp.Utterance)
-			if err := conn.WriteMessage(websocket.TextMessage, []byte(chatResp.Utterance)); err != nil {
+			log.Printf("LLM response for user %s: %s", user.Username, chatResp.Response.Utterance)
+			if err := conn.WriteMessage(websocket.TextMessage, []byte(chatResp.Response.Utterance)); err != nil {
 				log.Printf("Error sending message to user %s: %v", user.Username, err)
+				break ReadLoop
+			}
+			if chatResp.SimulationEnded {
+				log.Printf("manageTextSession(): Simulation ended by LLM (Reason: %s)", chatResp.EndReason)
+				log.Printf("[시뮬레이션 종료] 점수: %.0f점, 사유: %s, 피드백: %s",
+					chatResp.Score,
+					chatResp.EndReason,
+					chatResp.Feedback,
+				)
+				conn.WriteMessage(websocket.TextMessage, []byte("[시스템: 통화가 종료되었습니다.]"))
+				closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "Simulation Ended")
+				conn.WriteMessage(websocket.CloseMessage, closeMsg)
+				time.Sleep(100 * time.Millisecond)
 				break ReadLoop
 			}
 		}

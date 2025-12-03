@@ -21,14 +21,8 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
-// 발견된 문제 : 오디오의 ReceiveTranslatedText()에서 WebSocket 연결이 강제로 종료됨
-// 해결되는 지점 : main branch
-// 주요 변경 사항 체크포인트 : 연결 시의 Init Struct, Access Control용 Project-Secure
-// 해결 방안 1 : Singup(), Login()에 Middleware 제거, 이후 Init Message 제거
-// 해결 방안 2 : main branch로 돌아가서 하나씩 다시 적용
-
 func init() {
-	err := godotenv.Load("../../.env")
+	err := godotenv.Load("../../../.env")
 	if err != nil {
 		cwd, _ := os.Getwd()
 		log.Println("init(): Error Loading .env, CWD:", cwd, "Error:", err)

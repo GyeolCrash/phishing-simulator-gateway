@@ -227,7 +227,8 @@ func StreamAudio(c *gin.Context) {
 	filename := c.Param("filename")
 
 	cleanFilename := filepath.Base(filename)
-	filePath := filepath.Join("data", "records", username, cleanFilename)
+	filePath := filepath.Join("data", "Records", username, cleanFilename)
+	log.Printf("%s", filePath)
 
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Audio file not found"})

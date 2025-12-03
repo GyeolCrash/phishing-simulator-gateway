@@ -33,10 +33,12 @@ func manageAudioSession(conn *websocket.Conn, user models.User, parentCtx contex
 	var wg sync.WaitGroup
 	wg.Add(4)
 
-	clientChan := make(chan []byte, 128)
-	serverChan := make(chan []byte, 128)
-	archiveC2SChan := make(chan []byte, 128)
-	archiveS2CChan := make(chan archiver.ArchiveS2CJob, 128)
+	const DATA_SIZE = 256
+
+	clientChan := make(chan []byte, DATA_SIZE)
+	serverChan := make(chan []byte, DATA_SIZE)
+	archiveC2SChan := make(chan []byte, DATA_SIZE)
+	archiveS2CChan := make(chan archiver.ArchiveS2CJob, DATA_SIZE)
 
 	archiver, err := archiver.NewArchiver(sessionID)
 	if err != nil {
@@ -66,6 +68,7 @@ func manageAudioSession(conn *websocket.Conn, user models.User, parentCtx contex
 		orchestrateAudioSession(
 			user,
 			scenarioKey,
+			sessionID,
 			sessionStartTime,
 			clientChan,
 			serverChan,
@@ -152,7 +155,11 @@ func clientWritePump(conn *websocket.Conn, username string, clientAudioOutChan <
 		case audioData, ok := <-clientAudioOutChan:
 			if !ok {
 				log.Printf("clientWritePump(): audio out Chan closed for user: %s", username)
-				conn.WriteMessage(websocket.CloseMessage, []byte{})
+				//conn.WriteMessage(websocket.CloseMessage, []byte{})
+				closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "Session Ended")
+				if err := conn.WriteMessage(websocket.CloseMessage, closeMsg); err != nil {
+					log.Printf("clientWritePump(): Failed to send close message: %v", err)
+				}
 				return
 			}
 

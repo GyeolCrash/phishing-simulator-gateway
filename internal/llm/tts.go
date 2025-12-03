@@ -46,12 +46,15 @@ func (t *TTSClient) ConvertTextToAudio(text string) ([]byte, error) {
 		},
 		Voice: &texttospeechpb.VoiceSelectionParams{
 			LanguageCode: "ko-KR",
-			// SsmlGender:   texttospeechpb.Ssml,
-			Name: "ko-KR-Wavenet-A",
+			SsmlGender:   texttospeechpb.SsmlVoiceGender_FEMALE,
+			Name:         "ko-KR-Wavenet-A",
 		},
 		AudioConfig: &texttospeechpb.AudioConfig{
 			AudioEncoding:   texttospeechpb.AudioEncoding_LINEAR16,
 			SampleRateHertz: 16000,
+			SpeakingRate:    1.25,
+			Pitch:           -3.8,
+			VolumeGainDb:    -1.4,
 		},
 	}
 

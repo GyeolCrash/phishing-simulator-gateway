@@ -101,12 +101,12 @@ func HandleSimulationConnection(c *gin.Context) {
 		return
 	}
 
-	log.Printf("User: %s, %d, %s, Scenario: %s, Mode: %s", user.Profile.Name, user.Profile.Age, user.Profile.Gender, scenario.Name, mode)
+	log.Printf("User: %s, %d, %s, Scenario: %s, Mode: %s", user.Profile.Name, user.Profile.Age, user.Profile.Gender, scenario, mode)
 
 	log.Printf("WebSocket connection established for user: %s", username)
 
 	// 초기 메시지 전송
-	initalMessage := fmt.Sprintf("Start Secnario %s: %s", scenario.Name, scenario.Description)
+	initalMessage := fmt.Sprintf("Start Secnario %s", scenario)
 	if err := conn.WriteMessage(websocket.TextMessage, []byte(initalMessage)); err != nil {
 		log.Printf("Error sending message to user %s: %v", username, err)
 		return

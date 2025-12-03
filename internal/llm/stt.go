@@ -78,7 +78,7 @@ func (r *StreamingRecognizer) SendAudio(audioData []byte) error {
 
 // gRPC 스트리밍 응답 수신
 func (r *StreamingRecognizer) ReceiveTranslatedText(resultChannel chan<- string, errChan chan<- error) {
-	log.Printf("ReceiveTranslatedText(): started")
+	//log.Printf("ReceiveTranslatedText(): started")
 	for {
 		resp, err := r.stream.Recv()
 		if err == io.EOF {
@@ -101,7 +101,7 @@ func (r *StreamingRecognizer) ReceiveTranslatedText(resultChannel chan<- string,
 				log.Printf("ReceiveTranslatedText(): final result: %s", result.Alternatives[0].Transcript)
 				resultChannel <- result.Alternatives[0].Transcript
 			} else {
-				log.Printf("ReceiveTranslatedText(): interim result: %s", result.Alternatives[0].Transcript)
+				//log.Printf("ReceiveTranslatedText(): interim result: %s", result.Alternatives[0].Transcript)
 				// resultChannel <- result.Alternatives[0].Transcript
 			}
 		}
