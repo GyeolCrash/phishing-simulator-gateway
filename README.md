@@ -46,19 +46,14 @@ go mod tidy
 go run cmd/api/main.go
 ```
 
-### **2.3. 환경 변수 설정 (Optional)**
+### **2.3. 환경 변수 설정 **
 
-* 루트 디렉토리에 .env 파일을 생성하여 JWT 시크릿 키를 설정할 수 있습니다. (설정하지 않으면 internal/auth/token.go의 기본 키가 사용됩니다.)  
+* 루트 디렉토리에 .env 파일을 생성하여 JWT 시크릿 키를 설정할 수 있습니다. (설정하지 않으면 internal/auth/token.go의 기본 키가 사용됨)  
   JWT\_SECRET\_KEY="your\_very\_strong\_secret\_key"
+* 일부 키는 생성하지 않으면 Fatal 발생
 
-### **2.4. 테스트 환경 준비 (Optional)**
 
-* S→C (서버→클라이언트) 오디오 응답 테스트:  
-  testdata/ 디렉토리를 생성하고, response.mp3 또는 response.wav 등 모의 응답으로 사용할 오디오 파일을 위치시킵니다. (파일명은 handler/websocket\_handler.go의 init() 함수에서 수정 가능)  
-* C→S (클라이언트→서버) 오디오 저장 테스트:  
-  서버가 실행되면 testdata/received/ 디렉토리가 자동으로 생성되며, voice 모드로 수신된 오디오 파일이 이곳에 저장됩니다.
-
-## **3\. 디렉토리 구조 (Directory Structure)**
+## **3\. Directory Structure **
 ```
 PishingSimulator_SecurityProject/
 ├── cmd/api/
@@ -99,7 +94,7 @@ PishingSimulator_SecurityProject/
 └── README.md                    (본 파일)
 ```
 
-## 4, 주요 기능
+## 4. 주요 기능
 * 회원 정보 관리
 * Client, LLM 중계
 * STT/TTS 서비스 연결
